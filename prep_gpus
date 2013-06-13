@@ -1,0 +1,7 @@
+#! /bin/sh
+kill `pidof nvidia-smi`
+nvidia-smi --ecc-config=0 
+nvidia-smi --compute-mode=1
+nvidia-smi --gpu-reset --id=0
+nvidia-smi --gpu-reset --id=1
+nohup nvidia-smi -l -f /var/log/nvidia-smi.log > /tmp/out 2> /tmp/err < /dev/null &

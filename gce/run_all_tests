@@ -1,0 +1,19 @@
+#! /bin/sh
+# Run all gce tests.
+
+# Find all files named test_*.py in the test/ directory.
+tests=`ls test/test*.py | sed 's/\.py//' | sed 's/test\//test./'`
+
+echo mpirun on hosts: $1
+
+# Run all the tests found.
+for test in $tests
+do
+    echo '\n\n===' $test'\n'
+    mpirun -host $1 python -m $test
+    
+    if [ $? -ne 0 ]; then # Detect test fail condition.
+        exit 1 # Exit upon failure.
+    fi
+done
+
