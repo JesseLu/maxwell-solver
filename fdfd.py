@@ -17,13 +17,13 @@ def simulate(name, check_success_only=False):
     if comm.Get_rank() == 0:
         # write_status('EXEC initializing\n')
         def rep(err):
-            write_status('Solving... %e (%1.1f seconds)\n' % (err, (time.time() - rep.stime)))
+            write_status('%e %1.1f\n' % (err, (time.time() - rep.stime)))
     else: # No reporting needed for non-root nodes.
         def rep(err):
             pass
             
     # Get input parameters.
-    params = get_parameters(name + '.i')
+    params = get_parameters(name)
 
     # Define operations needed for the lumped bicg operation.
     b, x, ops, aux_ops = maxwell_ops_lumped.ops(params)
@@ -68,27 +68,36 @@ def simulate(name, check_success_only=False):
 
     return success
 
-def get_parameters(infile):
+def get_parameters(name):
     """ Reads the simulation parameters from the input hdf5 file. """
 
-    f = h5py.File(infile, 'r')
+    f = h5py.File(name + '.grid', 'r')
 
-    omega = np.complex128(f['omega_real'][0] + 1j * f['omega_imag'][0])
+    omega = np.complex128(f['omega_r'][0] + 1j * f['omega_i'][0])
     # bound_conds = f['bound_conds'][:]
 
-    # Function used to read in the 1D and 3D complex vector fields.
-    get_field = lambda a: [(f[a+'_'+u+'_real'][:] + 1j * f[a+'_'+u+'_imag'][:]).\
+    # Function used to read in a 1D complex vector fields.
+    get_1D_fields = lambda a: [(f[a+'_'+u+'r'][:] + 1j * f[a+'_'+u+'i'][:]).\
                             astype(np.complex128) for u in 'xyz']
 
     # Read in s and t vectors.
-    s = get_field('d_prim')
-    t = get_field('d_dual')
+    s = get_1D_fields('sp')
+    t = get_1D_fields('sd')
+
+    # Function used to read in 3D complex vector fields.
+    def get_3D_fields(a):
+        field = []
+        for k in range(3):
+            key = name + '.' + a + '_' + 'xyz'[k]
+            field.append((h5py.File(key + 'r')['data'][:] + \
+                    1j * h5py.File(key + 'i')['data'][:]).astype(np.complex128))
+        return field
 
     # Read in m, e, and j fields.
-    m = get_field('mu')
-    e = get_field('epsilon')
-    j = get_field('J')
-    x = get_field('E')
+    e = get_3D_fields('e')
+    j = get_3D_fields('J')
+    m = get_3D_fields('m')
+    x = get_3D_fields('E')
 
 #     # Add a relatively small measure of randomness to x.
 #     # Make the magnitude of the random numbers to be about 1/1000th of the
