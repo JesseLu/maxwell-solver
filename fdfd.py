@@ -4,7 +4,7 @@ import maxwell_ops_lumped
 from solvers import bicg
 from gce.grid import Grid
 from mpi4py.MPI import COMM_WORLD as comm
-import time, sys, tempfile
+import time, sys, tempfile, os
 
 def simulate(name, check_success_only=False):
     """ Read simulation from input file, simulate, and write out results. """
@@ -13,7 +13,7 @@ def simulate(name, check_success_only=False):
     tempfile.tempdir = '/tmp'
 
     # Create the reporter function.
-    write_status = lambda msg: open(name + '.s', 'a').write(msg)
+    write_status = lambda msg: open(name + '.status', 'a').write(msg)
     if comm.Get_rank() == 0:
         # write_status('EXEC initializing\n')
         def rep(err):
@@ -72,6 +72,7 @@ def get_parameters(name):
     """ Reads the simulation parameters from the input hdf5 file. """
 
     f = h5py.File(name + '.grid', 'r')
+    files_to_delete = [name + '.grid']
 
     omega = np.complex128(f['omega_r'][0] + 1j * f['omega_i'][0])
     # bound_conds = f['bound_conds'][:]
@@ -84,6 +85,7 @@ def get_parameters(name):
     s = get_1D_fields('sp')
     t = get_1D_fields('sd')
 
+
     # Function used to read in 3D complex vector fields.
     def get_3D_fields(a):
         field = []
@@ -91,6 +93,8 @@ def get_parameters(name):
             key = name + '.' + a + '_' + 'xyz'[k]
             field.append((h5py.File(key + 'r')['data'][:] + \
                     1j * h5py.File(key + 'i')['data'][:]).astype(np.complex128))
+            files_to_delete.append(key + 'r')
+            files_to_delete.append(key + 'i')
         return field
 
     # Read in m, e, and j fields.
@@ -118,6 +122,10 @@ def get_parameters(name):
     err_thresh = float(f['err_thresh'][0])
 
     f.close() # Close file.
+    comm.Barrier()
+    if comm.Get_rank() == 0: # Only root needs to delete
+        for filename in files_to_delete:
+            os.remove(filename)
 
     # Do some simple pre-computation.
     for k in range(3):
@@ -140,9 +148,9 @@ def write_results(name, result):
     # Write out the datasets.
     for f in ['E', 'H']:
         for k in range(3):
-            my_write(f + 'xyz'[k] + '_real', \
+            my_write(f + '_' + 'xyz'[k] + 'r', \
                     np.real(result[f][k]).astype(np.float32))
-            my_write(f + 'xyz'[k] + '_imag', \
+            my_write(f + '_' + 'xyz'[k] + 'i', \
                     np.imag(result[f][k]).astype(np.float32))
 #             file.create_dataset(f + '_' + 'xyz'[k] + '_real', \
 #                                 data=np.real(result[f][k]).astype(np.float64),
