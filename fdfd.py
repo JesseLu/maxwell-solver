@@ -17,7 +17,7 @@ def simulate(name, check_success_only=False):
     if comm.Get_rank() == 0:
         # write_status('EXEC initializing\n')
         def rep(err):
-            write_status('%e %1.1f\n' % (err, (time.time() - rep.stime)))
+            write_status('%e\n' % err)
     else: # No reporting needed for non-root nodes.
         def rep(err):
             pass
@@ -36,11 +36,11 @@ def simulate(name, check_success_only=False):
                                             reporter=rep, \
                                             err_thresh=params['err_thresh'], \
                                             **ops)
-    # Last update to status file.
-    if comm.Get_rank() == 0:
-        write_status("Convergence %s in %1.1f seconds\n" % \
-            (("success" if success else "FAIL"), \
-            ((time.time() - start_time))))
+#     # Last update to status file.
+#     if comm.Get_rank() == 0:
+#         write_status("Convergence %s in %1.1f seconds\n" % \
+#             (("success" if success else "FAIL"), \
+#             ((time.time() - start_time))))
 
     if check_success_only: # Don't write output, just see if we got a success.
         return success
