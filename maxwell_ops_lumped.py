@@ -23,7 +23,7 @@ def ops(params):
 
     if comm.rank == 0:
         pre_cond, post_cond = conditioners(params, dtype)
-        params['j'] = pre_cond(params['j']) # Precondition b.
+        # params['j'] = pre_cond(params['j']) # Precondition b.
     else:
         post_cond = None
 
@@ -162,21 +162,27 @@ def conditioners(params, dtype):
 #             Ez(0,0,0) *= tx0(_X) * ty0(_Y) * tz1(_Z);
 #         } """
                     
+    def reshaper(f):
+        for k in range(3):
+            new_shape = [1, 1, 1]
+            new_shape[k] = f[k].size
+            f[k] = f[k].reshape(new_shape)
+        return f
+
+
     # Consts that are used.
-    sqrt_sc_pml_0 = [dtype(np.sqrt(s)**1) for s in params['s']]
-    sqrt_sc_pml_1 = [dtype(np.sqrt(t)**1) for t in params['t']]
-    inv_sqrt_sc_pml_0 = [dtype(np.sqrt(s)**-1) for s in params['s']]
-    inv_sqrt_sc_pml_1 = [dtype(np.sqrt(t)**-1) for t in params['t']]
+    sqrt_sc_pml_0 = reshaper([dtype(np.sqrt(s)**1) for s in params['s']])
+    sqrt_sc_pml_1 = reshaper([dtype(np.sqrt(t)**1) for t in params['t']])
+    inv_sqrt_sc_pml_0 = reshaper([dtype(np.sqrt(s)**-1) for s in params['s']])
+    inv_sqrt_sc_pml_1 = reshaper([dtype(np.sqrt(t)**-1) for t in params['t']])
+
 
     # Define the actual functions.
 
     def apply_cond(x, t0, t1):
-        for i in range(params['shape'][0]):
-            for j in range(params['shape'][1]):
-                for k in range(params['shape'][2]):
-                    x[0][i,j,k] *= t1[0][i] * t0[1][j] * t0[2][k]
-                    x[1][i,j,k] *= t0[0][i] * t1[1][j] * t0[2][k]
-                    x[2][i,j,k] *= t0[0][i] * t0[1][j] * t1[2][k]
+        x[0] *= t1[0] * t0[1] * t0[2]
+        x[1] *= t0[0] * t1[1] * t0[2]
+        x[2] *= t0[0] * t0[1] * t1[2]
         return x
 
     def pre_step(x):
@@ -186,51 +192,6 @@ def conditioners(params, dtype):
         return apply_cond(x, inv_sqrt_sc_pml_0, inv_sqrt_sc_pml_1)
 
     return pre_step, post_step
-
-
-# 
-# def conditioners(params, dtype): 
-#     """ Form the functions for both the preconditioner and postconditioner. """
-# 
-#     # Code for the post step function.
-#     code = """
-#         if (_in_global) {
-#             Ex(0,0,0) *= tx1(_X) * ty0(_Y) * tz0(_Z);
-#             Ey(0,0,0) *= tx0(_X) * ty1(_Y) * tz0(_Z);
-#             Ez(0,0,0) *= tx0(_X) * ty0(_Y) * tz1(_Z);
-#         } """
-#                     
-#     # Form the Gird parameters.
-#     grid_names = ['Ex', 'Ey', 'Ez']
-#     grid_params = [(name, 'grid', dtype) for name in grid_names]
-# 
-#     # Form the Const parameters
-#     const_names = ('tx0', 'ty0', 'tz0', \
-#                     'tx1', 'ty1', 'tz1')
-#     const_sizes = params['shape'] * 2
-#     const_params = [(const_names[k], 'const', dtype, const_sizes[k]) \
-#                         for k in range(len(const_sizes))]
-# 
-#     # Compile the code.
-#     post_fun = Kernel(code, *(grid_params + const_params), \
-#                     shape_filter='skinny')
-# 
-#     # Consts that are used.
-#     sqrt_sc_pml_0 = [Const(dtype(np.sqrt(s)**1)) for s in params['s']]
-#     sqrt_sc_pml_1 = [Const(dtype(np.sqrt(t)**1)) for t in params['t']]
-#     inv_sqrt_sc_pml_0 = [Const(dtype(np.sqrt(s)**-1)) for s in params['s']]
-#     inv_sqrt_sc_pml_1 = [Const(dtype(np.sqrt(t)**-1)) for t in params['t']]
-# 
-#     # Define the actual functions.
-# 
-#     def pre_step(x):
-#         post_fun(*(x + sqrt_sc_pml_0 + sqrt_sc_pml_1))
-# 
-#     def post_step(x):
-#         post_fun(*(x + inv_sqrt_sc_pml_0 + inv_sqrt_sc_pml_1))
-# 
-#     return pre_step, post_step
-# 
 
 def _get_cuda_type(dtype):
     """ Convert numpy type into cuda type. """
