@@ -16,15 +16,14 @@ def ops(params):
     """ Define the operations that specify the symmetrized, lumped problem. """
 
     # Initialize the space.
-    shape = params['j'][0].shape
-    initialize_space(shape)
+    initialize_space(params['shape'])
 
     dtype = np.complex128
 
     b = [Grid(dtype(f), x_overlap=1) for f in params['j']]
     x = [Grid(dtype(f), x_overlap=1) for f in params['x']]
 
-    pre_cond, post_cond = conditioners(shape, params, dtype)
+    pre_cond, post_cond = conditioners(params, dtype)
     pre_cond(b) # "Precondition" b.
 
     # Return b, the lumped operations needed for the bicg algorithm, and
@@ -32,7 +31,7 @@ def ops(params):
     return  b, x, \
             {'zeros': lambda: [Grid(dtype, x_overlap=1) for k in range(3)], \
             'rho_step': rho_step(dtype), \
-            'alpha_step': alpha_step(shape, params, dtype)}, \
+            'alpha_step': alpha_step(params, dtype)}, \
             post_cond
 #             {'post_cond': post_cond, \
 #             'calc_H': calc_H(shape, params, dtype)}
@@ -84,14 +83,14 @@ def rho_step(dtype):
     return rho_step
 
 
-def alpha_step(shape, params, dtype): 
+def alpha_step(params, dtype): 
     """ Define the alpha step function needed for the bicg algorithm. """
     num_shared_banks = 6 
 
     # Render the pre-loop and in-loop code.
     cuda_type = _get_cuda_type(dtype)
     code_allpre = jinja_env.get_template('alpha_allpre.cu').\
-                    render(dims=shape, \
+                    render(dims=params['shape'], \
                             type=cuda_type, \
                             mu_equals_1=False, \
                             full_operator=True)
@@ -104,7 +103,7 @@ def alpha_step(shape, params, dtype):
     const_names = ('sx0', 'sy0', 'sz0', 'sx1', 'sy1', 'sz1') + \
                     ('sqrt_sx0', 'sqrt_sy0', 'sqrt_sz0', \
                     'sqrt_sx1', 'sqrt_sy1', 'sqrt_sz1')
-    const_sizes = shape + shape + shape + shape 
+    const_sizes = params['shape'] * 4
     const_params = [(const_names[k], 'const', dtype, const_sizes[k]) \
                         for k in range(len(const_sizes))]
 
@@ -147,66 +146,7 @@ def alpha_step(shape, params, dtype):
     return alpha_step
 
 
-def calc_H(shape, params, dtype): 
-    """ Define the function needed to calculate H from E. """
-    num_shared_banks = 6 
-
-    # Render the pre-loop and in-loop code.
-    cuda_type = _get_cuda_type(dtype)
-    code_allpre = jinja_env.get_template('alpha_allpre.cu').\
-                    render(dims=shape, \
-                            type=cuda_type, \
-                            mu_equals_1=False, \
-                            full_operator=False)
-
-    # Grid input parameters.
-    grid_params = [(A + i, 'grid', dtype) for A in ['P', 'P1', 'R', 'V', 'e', 'm'] \
-                                            for i in ['x', 'y', 'z']]
-
-    # Const input parameters.
-    const_names = ('sx0', 'sy0', 'sz0', 'sx1', 'sy1', 'sz1') + \
-                    ('sqrt_sx0', 'sqrt_sy0', 'sqrt_sz0', \
-                    'sqrt_sx1', 'sqrt_sy1', 'sqrt_sz1')
-    const_sizes = shape + shape + shape + shape 
-    const_params = [(const_names[k], 'const', dtype, const_sizes[k]) \
-                        for k in range(len(const_sizes))]
-
-    # Compile.
-    alpha_fun = Kernel('', \
-                    ('beta', 'number', dtype), \
-                    ('alpha_denom', 'out', dtype), \
-                    *(grid_params + const_params), \
-                    pre_loop=code_allpre, \
-                    padding=(1,1,1,1), \
-                    smem_per_thread=num_shared_banks*16, \
-                    shape_filter='square')
-
-    # Temporary variables.
-    alpha_denom_out = Out(dtype)
-    # p_temp = [Grid(dtype, x_overlap=1) for k in range(3)] # Used to swap p.
-
-    # Grid variables.
-    # e = [Grid(dtype(f), x_overlap=1) for f in params['e']]
-    m = [Grid(dtype(f), x_overlap=1) for f in params['m']] # Optional.
-
-    # Constant variables.
-    sc_pml_0 = [Const(dtype(s**-1)) for s in params['s']]
-    sc_pml_1 = [Const(dtype(t**-1)) for t in params['t']]
-    sc_ones = [Const(dtype(1 + 0*s)) for s in params['s']]
-
-    # Define the function
-    def calc_H(H, E):
-        for field in E:
-            field.synchronize()
-        # Execute cuda code.
-        alpha_fun(dtype(0), alpha_denom_out, \
-                    *(E + E + E + H + E + m + \
-                        sc_pml_0 + sc_pml_1 + sc_ones + sc_ones))
-
-    return calc_H 
-
-
-def conditioners(shape, params, dtype): 
+def conditioners(params, dtype): 
     """ Form the functions for both the preconditioner and postconditioner. """
 
     # Code for the post step function.
@@ -224,7 +164,7 @@ def conditioners(shape, params, dtype):
     # Form the Const parameters
     const_names = ('tx0', 'ty0', 'tz0', \
                     'tx1', 'ty1', 'tz1')
-    const_sizes = shape + shape 
+    const_sizes = params['shape'] * 2
     const_params = [(const_names[k], 'const', dtype, const_sizes[k]) \
                         for k in range(len(const_sizes))]
 

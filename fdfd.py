@@ -72,72 +72,81 @@ def simulate(name, check_success_only=False):
 def get_parameters(name):
     """ Reads the simulation parameters from the input hdf5 file. """
 
-    f = h5py.File(name + '.grid', 'r')
-    files_to_delete = [name + '.grid']
+    if comm.rank == 0:
+        f = h5py.File(name + '.grid', 'r')
+        files_to_delete = [name + '.grid']
 
-    omega = np.complex128(f['omega_r'][0] + 1j * f['omega_i'][0])
-    # bound_conds = f['bound_conds'][:]
+        omega = np.complex128(f['omega_r'][0] + 1j * f['omega_i'][0])
+        shape = tuple([int(s) for s in f['shape'][:]])
 
-    # Function used to read in a 1D complex vector fields.
-    get_1D_fields = lambda a: [(f[a+'_'+u+'r'][:] + 1j * f[a+'_'+u+'i'][:]).\
-                            astype(np.complex128) for u in 'xyz']
+        # bound_conds = f['bound_conds'][:]
 
-    # Read in s and t vectors.
-    s = get_1D_fields('sp')
-    t = get_1D_fields('sd')
+        # Function used to read in a 1D complex vector fields.
+        get_1D_fields = lambda a: [(f[a+'_'+u+'r'][:] + 1j * f[a+'_'+u+'i'][:]).\
+                                astype(np.complex128) for u in 'xyz']
+
+        # Read in s and t vectors.
+        s = get_1D_fields('sp')
+        t = get_1D_fields('sd')
+
+        # Read in max_iters and err_thresh.
+        max_iters = int(f['max_iters'][0])
+        err_thresh = float(f['err_thresh'][0])
 
 
-    # Function used to read in 3D complex vector fields.
-    def get_3D_fields(a):
-        field = []
-        for k in range(3):
-            key = name + '.' + a + '_' + 'xyz'[k]
-            field.append((h5py.File(key + 'r')['data'][:] + \
-                    1j * h5py.File(key + 'i')['data'][:]).astype(np.complex128))
-            files_to_delete.append(key + 'r')
-            files_to_delete.append(key + 'i')
-        return field
+        f.close() # Close file.
 
-    # Read in m, e, and j fields.
-    e = get_3D_fields('e')
-    j = get_3D_fields('J')
-    m = get_3D_fields('m')
-    x = get_3D_fields('E')
+        # Function used to read in 3D complex vector fields.
+        def get_3D_fields(a):
+            field = []
+            for k in range(3):
+                key = name + '.' + a + '_' + 'xyz'[k]
+                field.append((h5py.File(key + 'r')['data'][:] + \
+                        1j * h5py.File(key + 'i')['data'][:]).astype(np.complex128))
+                files_to_delete.append(key + 'r')
+                files_to_delete.append(key + 'i')
+            return field
 
-#     # Add a relatively small measure of randomness to x.
-#     # Make the magnitude of the random numbers to be about 1/1000th of the
-#     # maximum value of x.
-#     x_mag = np.max([np.max(np.abs(xcomp)) for xcomp in x]) 
-#     j_mag = np.max([np.max(np.abs(jcomp)) for jcomp in j]) 
-#     if x_mag == 0: 
-#         rand_mag = 1e-3 * j_mag
-#     else:
-#         rand_mag = 1e-3 * x_mag
-# 
-#     # Add the randomness.
-#     x = [xcomp + rand_mag * (np.random.randn(*xcomp.shape) + \
-#                             1j*np.random.randn(*xcomp.shape)) for xcomp in x]
+#         # Read in m, e, and j fields.
+#         for name in 'eJmE':
+#             print comm.rank, name
+#             params[name] = get_3D_fields(name)
+        e = get_3D_fields('e')
+        j = get_3D_fields('J')
+        m = get_3D_fields('m')
+        x = get_3D_fields('E')
 
-    # Read in max_iters and err_thresh.
-    max_iters = int(f['max_iters'][0])
-    err_thresh = float(f['err_thresh'][0])
 
-    f.close() # Close file.
-    comm.Barrier()
-    if comm.Get_rank() == 0: # Only root needs to delete
         for filename in files_to_delete:
             os.remove(filename)
 
-    # Do some simple pre-computation.
-    for k in range(3):
-        m[k] = m[k]**-1
-        e[k] = omega**2 * e[k]
-        j[k] = -1j * omega * j[k]
+        # Do some simple pre-computation.
+        for k in range(3):
+            m[k] = m[k]**-1
+            e[k] = omega**2 * e[k]
+            j[k] = -1j * omega * j[k]
 
-    # Return all inputs as a dictionary.
-    return {'omega': omega, 's': s, 't': t, \
-            'm': m, 'e': e, 'j': j, 'x': x, \
-            'max_iters': max_iters, 'err_thresh': err_thresh}
+        params = {'omega': omega, 'shape': shape, \
+                'max_iters': max_iters, 'err_thresh': err_thresh, \
+                's': s, 't': t}
+                # 'e': e, 'm': m, 'j': j, 'x': x}
+    else:
+        params = None
+
+    params = comm.bcast(params)
+
+    if comm.rank == 0:
+        params['e'] = e
+        params['m'] = m
+        params['j'] = j
+        params['x'] = x
+        
+    else:
+        for field_name in 'emjx':
+            params[field_name] = [None] * 3
+
+    return params
+
 
 def write_results(name, result):
     """ Write out the results to an hdf5 file. """

@@ -128,8 +128,11 @@ class __Space():
 
         # Partition the space.
         # Each space is responsible for field[x_range[0]:x_range[1],:,:].
-        self.x_range = (int(self.shape[0] * (float(rank) / size)), \
-                        int(self.shape[0] * (float(rank+1) / size)))
+        get_x_range = lambda r: (int(self.shape[0] * (float(r) / size)), \
+                                int(self.shape[0] * (float(r+1) / size)))
+        self.x_range = get_x_range(rank)
+
+        self.all_x_ranges = [get_x_range(r) for r in range(size)]
 
 
 #     def __del__(self):
@@ -142,6 +145,7 @@ class __Space():
         """ Return information about the space as a dict. """
         return {'shape': self.shape, \
                 'x_range': self.x_range, \
+                'all_x_ranges': self.all_x_ranges, \
                 'mpi_adj': self.mpi_adj, \
                 'max_shared_mem': self.device.max_shared_memory_per_block, \
                 'max_block_z': self.device.max_block_dim_x, \

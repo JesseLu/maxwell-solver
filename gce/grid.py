@@ -54,6 +54,8 @@ class Grid(Data):
 
         shape = get_space_info()['shape'] # Get the shape of the space.
         xr = get_space_info()['x_range'] # Get the local x_range.
+        all_x_ranges = get_space_info()['all_x_ranges'] # Get the local x_range.
+        local_shape = (xr[1]-xr[0], shape[1], shape[2])
 
         self._set_gce_type('grid') # Set the gce type to grid.
 
@@ -63,28 +65,37 @@ class Grid(Data):
         elif x_overlap < 0:
             raise TypeError('x_overlap must be a non-negative integer.')
 
-        # Process the array_or_dtype input variable.
-        if type(array_or_dtype) is np.ndarray: # Input is an array.
-            array = array_or_dtype
+        if comm.rank == 0:
+            # Process the array_or_dtype input variable.
+            if type(array_or_dtype) is np.ndarray: # Input is an array.
+                array = array_or_dtype
 
-            # Make sure the array is of the correct shape.
-            if array.shape != shape:
-                raise TypeError('Shape of array does not match shape of space.')
+                # Make sure the array is of the correct shape.
+                if array.shape != shape:
+                    raise TypeError('Shape of array does not match shape of space.')
 
-            # Make sure the array is of a valid datatype.
-            self._get_dtype(array.dtype.type)
-
-
-        elif type(array_or_dtype) is type: # Input is a datatype.
-            self._get_dtype(array_or_dtype) # Validate the dtype.
-            array = np.zeros(shape, dtype=self.dtype) # Make a zeros array.
-
-        else: # Invalid input.
-            raise TypeError('Input variable must be a numpy array or dtype')
+                # Make sure the array is of a valid datatype.
+                self._get_dtype(array.dtype.type)
 
 
-        # Narrow down the array to local x_range.
-        array = array[xr[0]:xr[1],:,:]
+            elif type(array_or_dtype) is type: # Input is a datatype.
+                self._get_dtype(array_or_dtype) # Validate the dtype.
+                array = np.zeros(shape, dtype=self.dtype) # Make a zeros array.
+
+            else: # Invalid input.
+                raise TypeError('Input variable must be a numpy array or dtype')
+
+            # Prepare array to be scattered.
+            array = [array[r[0]:r[1],:,:] for r in all_x_ranges]
+
+        else:
+            array = None
+
+        array = comm.scatter(array)
+        self._get_dtype(array.dtype.type)
+
+#         # Narrow down the array to local x_range.
+#         array = array[xr[0]:xr[1],:,:]
 
         # Add padding to array, if needed.
         self._xlap = x_overlap
