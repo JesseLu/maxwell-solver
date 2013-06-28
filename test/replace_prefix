@@ -1,0 +1,13 @@
+#! /usr/bin/python
+#
+# Replace prefixes 
+
+import sys, os
+
+old = sys.argv[1]
+new = sys.argv[2]
+
+for name in sys.argv[3:]:
+    
+    os.rename(name, new + name.split(old)[-1])
+
