@@ -47,7 +47,7 @@ def simulate(name, check_success_only=False):
         return success
 
 
-    post_cond(x) # Apply "postconditioner" to x.
+    # post_cond(x) # Apply "postconditioner" to x.
 
 #     # Calculate H-field.
 #     y = ops['zeros']()
@@ -59,12 +59,14 @@ def simulate(name, check_success_only=False):
                 'err': err, \
                 'success': success}
 
+    # Postcondition E.
 #     # Scalar correction to the H fields.
 #     if comm.Get_rank() == 0:
 #         result['H'] = [(1j / params['omega']) * H for H in result['H']]
 #                 
     # Write results to output file.
     if comm.Get_rank() == 0:
+        result['E'] = post_cond(result['E'])
         write_results(name, result)
 
     return success
