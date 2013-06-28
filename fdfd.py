@@ -26,7 +26,8 @@ def simulate(name, check_success_only=False):
     params = get_parameters(name)
 
     # Define operations needed for the lumped bicg operation.
-    b, x, ops, aux_ops = maxwell_ops_lumped.ops(params)
+    # b, x, ops, aux_ops = maxwell_ops_lumped.ops(params)
+    b, x, ops, post_cond  = maxwell_ops_lumped.ops(params)
 
     # Solve!
     start_time = time.time()
@@ -46,22 +47,22 @@ def simulate(name, check_success_only=False):
         return success
 
 
-    aux_ops['post_cond'](x) # Apply "postconditioner" to x.
+    post_cond(x) # Apply "postconditioner" to x.
 
-    # Calculate H-field.
-    y = ops['zeros']()
-    aux_ops['calc_H'](y, x)
+#     # Calculate H-field.
+#     y = ops['zeros']()
+#     aux_ops['calc_H'](y, x)
 
     # Gather results onto root's host memory.
     result = {  'E': [E.get() for E in x], \
-                'H': [H.get() for H in y], \
+#                 'H': [H.get() for H in y], \
                 'err': err, \
                 'success': success}
 
-    # Scalar correction to the H fields.
-    if comm.Get_rank() == 0:
-        result['H'] = [(1j / params['omega']) * H for H in result['H']]
-                
+#     # Scalar correction to the H fields.
+#     if comm.Get_rank() == 0:
+#         result['H'] = [(1j / params['omega']) * H for H in result['H']]
+#                 
     # Write results to output file.
     if comm.Get_rank() == 0:
         write_results(name, result)
@@ -146,12 +147,11 @@ def write_results(name, result):
                                             create_dataset('data', data=data)
 
     # Write out the datasets.
-    for f in ['E', 'H']:
-        for k in range(3):
-            my_write(f + '_' + 'xyz'[k] + 'r', \
-                    np.real(result[f][k]).astype(np.float32))
-            my_write(f + '_' + 'xyz'[k] + 'i', \
-                    np.imag(result[f][k]).astype(np.float32))
+    for k in range(3):
+        my_write('E_' + 'xyz'[k] + 'r', \
+                np.real(result['E'][k]).astype(np.float32))
+        my_write('E_' + 'xyz'[k] + 'i', \
+                np.imag(result['E'][k]).astype(np.float32))
 #             file.create_dataset(f + '_' + 'xyz'[k] + '_real', \
 #                                 data=np.real(result[f][k]).astype(np.float64),
 #                                 compression=1)

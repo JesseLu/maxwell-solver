@@ -33,8 +33,9 @@ def ops(params):
             {'zeros': lambda: [Grid(dtype, x_overlap=1) for k in range(3)], \
             'rho_step': rho_step(dtype), \
             'alpha_step': alpha_step(shape, params, dtype)}, \
-            {'post_cond': post_cond, \
-            'calc_H': calc_H(shape, params, dtype)}
+            post_cond
+#             {'post_cond': post_cond, \
+#             'calc_H': calc_H(shape, params, dtype)}
             
 
 def rho_step(dtype):
