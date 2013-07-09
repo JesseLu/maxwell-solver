@@ -36,6 +36,7 @@
 
 // Constants. We have to have a crude work-around to avoid problems with 
 // trying to use pycuda::complex types in constant memory.
+{# Commented out for now.
 {%- for p in params if p.gce_type == 'const' %}
 __constant__ {{ p.alt_type }}  _{{ p.name }}_temp[{{ p.num_elems }}];
 {%- endfor %} 
@@ -46,14 +47,21 @@ __constant__ {{ p.alt_type }}  _{{ p.name }}_temp[{{ p.num_elems }}];
 #define {{ p.name }}(i) _{{ p.name }}_temp[i]
 {%- endif %}
 {%- endfor %} 
+#}
+{%- for p in params if p.gce_type == 'const' %}
+#define {{ p.name }}(i) {{ p.name }}[i]
+{%- endfor %} 
 
 // Dynamic allocation of shared memory
 extern __shared__ pycuda::complex<double> _gce_smem[];
 
 __global__ void _gce_kernel(const int _x_start, const int _x_end, 
         {#- Add the fields as input parameters to the function. -#}
-                           {%- for p in params if p.gce_type != 'const' -%} 
-                           {% if p.gce_type ==  'number' -%}
+                           {#{%- for p in params if p.gce_type != 'const' -%}#}
+                           {%- for p in params -%} 
+                           {% if p.gce_type ==  'const' -%}
+                           {{ p.cuda_type }}* {{ p.name }}
+                           {% elif p.gce_type ==  'number' -%}
                            {{ p.cuda_type }} {{ p.name }}
                            {% elif p.gce_type == 'out' -%}
                            {{ p.cuda_type }} *_{{ p.name }}_out

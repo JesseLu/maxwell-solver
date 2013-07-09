@@ -28,49 +28,29 @@ def simulate(name, check_success_only=False):
     params = get_parameters(name)
 
     # Define operations needed for the lumped bicg operation.
-    # b, x, ops, aux_ops = maxwell_ops_lumped.ops(params)
     b, x, ops, post_cond  = maxwell_ops_lumped.ops(params)
 
     # Solve!
     start_time = time.time()
     rep.stime = start_time
-    driver.start_profiler()
     x, err, success = bicg.solve_symm_lumped(b, x=x, \
                                             max_iters=params['max_iters'], \
                                             reporter=rep, \
                                             err_thresh=params['err_thresh'], \
                                             **ops)
-    driver.stop_profiler()
-#     # Last update to status file.
-#     if comm.Get_rank() == 0:
-#         write_status("Convergence %s in %1.1f seconds\n" % \
-#             (("success" if success else "FAIL"), \
-#             ((time.time() - start_time))))
 
     if check_success_only: # Don't write output, just see if we got a success.
         return success
 
 
-    # post_cond(x) # Apply "postconditioner" to x.
-
-#     # Calculate H-field.
-#     y = ops['zeros']()
-#     aux_ops['calc_H'](y, x)
-
     # Gather results onto root's host memory.
     result = {  'E': [E.get() for E in x], \
-#                 'H': [H.get() for H in y], \
                 'err': err, \
                 'success': success}
-
-    # Postcondition E.
-#     # Scalar correction to the H fields.
-#     if comm.Get_rank() == 0:
-#         result['H'] = [(1j / params['omega']) * H for H in result['H']]
-#                 
+ 
     # Write results to output file.
     if comm.Get_rank() == 0:
-        result['E'] = post_cond(result['E'])
+        result['E'] = post_cond(result['E']) # Apply postconditioner.
         write_results(name, result)
 
     return success

@@ -75,10 +75,10 @@ class Kernel():
                 'gce_type': v[1], \
                 'dtype': v[2], \
                 'cuda_type': cuda_types[v[2]]} for v in vars]
-        for k in range(len(params)): # We need size information for consts.
-            if params[k]['gce_type'] is 'const':
-                params[k]['num_elems'] = vars[k][3]
-                params[k]['alt_type'] = alt_types[params[k]['dtype']]
+#         for k in range(len(params)): # We need size information for consts.
+#             if params[k]['gce_type'] is 'const':
+#                 params[k]['num_elems'] = vars[k][3]
+#                 params[k]['alt_type'] = alt_types[params[k]['dtype']]
 
         # Get the template and render it using jinja2.
         shape = get_space_info()['shape'] # Shape of the space.
@@ -122,8 +122,9 @@ class Kernel():
         for p in params:
             if p['gce_type'] is 'number':
                 arg_types.append(p['dtype'])
-            elif p['gce_type'] is 'const':
-                pass # Consts don't actually get passed in.
+#             elif p['gce_type'] is 'const':
+#                 arg_types.append(p['dtype'])
+#                 # pass # Consts don't actually get passed in.
             else:
                 arg_types.append(np.intp)
         self.fun.prepare([np.int32, np.int32] + arg_types)
@@ -158,8 +159,10 @@ class Kernel():
                 if params[k]['gce_type'] is 'number':
                     gpu_params.append(params[k]['dtype'](args[k]))
                 elif params[k]['gce_type'] is 'const': # Load Const.
-                    d_ptr, size_in_bytes = my_get_global(params[k]['name'])
-                    drv.memcpy_dtod(d_ptr, args[k].data.gpudata, size_in_bytes)
+                    gpu_params.append(args[k].data.ptr)
+                    # Const no longer actually "const" in cuda code.
+#                     d_ptr, size_in_bytes = my_get_global(params[k]['name'])
+#                     drv.memcpy_dtod(d_ptr, args[k].data.gpudata, size_in_bytes)
                 elif params[k]['gce_type'] is 'grid': 
                     if args[k]._xlap is 0:
                         gpu_params.append(args[k].data.ptr)
@@ -171,7 +174,6 @@ class Kernel():
                     gpu_params.append(args[k].data.ptr)
                 else:
                     raise TypeError('Invalid input type.')
-
 
             # See if we need to synchronize grids after kernel execution.
             if post_sync_grids is None:
@@ -216,7 +218,7 @@ class Kernel():
             all_done.synchronize()
 
             # The delay between sync_done and comp_done should be small.
-            # Otherwise, the parallelization efficiency will suffer.
+            # Otherwise, the parallelization efficiency is suffering.
             print "(%d)" % comm.Get_rank(),
             for milliseconds in  [event_done.time_since(start) for event_done in \
                             (start2, pad_done, sync_done, comp_done, all_done)]:
