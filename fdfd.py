@@ -6,6 +6,8 @@ from gce.grid import Grid
 from mpi4py.MPI import COMM_WORLD as comm
 import time, sys, tempfile, os
 
+from pycuda import driver
+
 def simulate(name, check_success_only=False):
     """ Read simulation from input file, simulate, and write out results. """
 
@@ -32,11 +34,13 @@ def simulate(name, check_success_only=False):
     # Solve!
     start_time = time.time()
     rep.stime = start_time
+    driver.start_profiler()
     x, err, success = bicg.solve_symm_lumped(b, x=x, \
                                             max_iters=params['max_iters'], \
                                             reporter=rep, \
                                             err_thresh=params['err_thresh'], \
                                             **ops)
+    driver.stop_profiler()
 #     # Last update to status file.
 #     if comm.Get_rank() == 0:
 #         write_status("Convergence %s in %1.1f seconds\n" % \
@@ -93,6 +97,7 @@ def get_parameters(name):
 
         # Read in max_iters and err_thresh.
         max_iters = int(f['max_iters'][0])
+        # max_iters = 100
         err_thresh = float(f['err_thresh'][0])
 
 

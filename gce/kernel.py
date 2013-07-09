@@ -298,6 +298,7 @@ class Kernel():
 
         # A hack for profiling
         # valid_block_shapes = ((31,16),)
+        # valid_block_shapes = ((17,22),)
 
         if not valid_block_shapes: # Make sure the list is not empty.
             raise TypeError('No valid shapes found.')
