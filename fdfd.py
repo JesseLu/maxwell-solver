@@ -103,7 +103,7 @@ def get_parameters(name):
         m = get_3D_fields('m')
         x = get_3D_fields('E')
 
-
+        # Delete input files.
         for filename in files_to_delete:
             os.remove(filename)
 

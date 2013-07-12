@@ -23,7 +23,7 @@ def ops(params):
 
     if comm.rank == 0:
         pre_cond, post_cond = conditioners(params, dtype)
-        # params['j'] = pre_cond(params['j']) # Precondition b.
+        params['j'] = pre_cond(params['j']) # Precondition b.
     else:
         post_cond = None
 
